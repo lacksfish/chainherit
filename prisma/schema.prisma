@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Created via: npx prisma init --datasource-provider sqlite
+// Migrate dev via: npx prisma migrate dev --name init
+// Migrate prod via: npx prisma migrate deploy --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("PRISMA_DB_URL")
+}
+
+model Settings {
+  name  String @unique
+  value String?
+}
+
+model Wallet {
+  id              Int                 @id @default(autoincrement())
+  addresses       Address[]
+  transaction     TransactionSigned[]
+  rootPubKey      String              @unique /// @encrypted
+  rootPubKeyHash  String              @unique /// @encryption:hash(rootPubKey)
+  label           String              @unique /// @encrypted
+  labelHash       String?             @unique /// @encryption:hash(label)
+}
+
+model UTXO {
+  id           Int  @id @default(autoincrement())
+  txRaw        String /// @encrypted
+  txRawHash    String /// @encryption:hash(txRaw)
+  txHash       String /// @encrypted
+  txHashHash   String /// @encryption:hash(txHash)
+  blockHeight  String /// @encrypted
+  blockHeightHash String /// @encryption:hash(blockHeight)
+  value        String /// @encrypted
+  valueHash    String /// @encryption:hash(value)
+  txOutputN    String /// @encrypted
+  txOutputNHash String /// @encryption:hash(txOutputN)
+  scriptPubKey String /// @encrypted
+  scriptPubKeyHash String /// @encryption:hash(scriptPubKey)
+  address      Address @relation(fields: [addressId], references: [id])
+  addressId    Int
+}
+
+model Address {
+  id                 Int    @id @default(autoincrement())
+  wallet             Wallet @relation(fields: [walletId], references: [id])
+  walletId           Int
+  txCount            Int
+  derivationPath     String
+  address            String @unique /// @encrypted
+  addressHash        String @unique /// @encryption:hash(address)
+  scriptHash         String @unique /// @encrypted
+  scriptHashHash String?             @unique /// @encryption:hash(scriptHash)
+  pubkey             String @unique /// @encrypted
+  utxos              UTXO[]
+  unconfirmedBalance String    @default("0") /// @encrypted
+  confirmedBalance   String    @default("0") /// @encrypted
+  updatedAt          DateTime @updatedAt
+}
+
+model Recipient {
+  id        Int                 @id @default(autoincrement())
+  address   String              @unique /// @encrypted
+  addressHash String?           @unique /// @encryption:hash(address)
+  label     String              @unique /// @encrypted
+  labelHash String?             @unique /// @encryption:hash(label)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  distShare DistributionShare[]
+
+  @@unique([addressHash, labelHash], name: "addressLabelUnique")
+}
+
+model DistributionShare {
+  id             Int          @id @default(autoincrement())
+  recipient      Recipient    @relation(fields: [recipientId], references: [id])
+  recipientId    Int
+  distribution   Distribution @relation(fields: [distributionId], references: [id])
+  distributionId Int
+  percentage     String       @unique /// @encrypted
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Distribution {
+  id          Int                 @id @default(autoincrement())
+  distShares  DistributionShare[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  transaction TransactionSigned[]
+  label     String              @unique /// @encrypted
+  labelHash String?             @unique /// @encryption:hash(label)
+}
+
+model TransactionSigned {
+  id             Int           @id @default(autoincrement())
+  wallet         Wallet        @relation(fields: [walletId], references: [id])
+  walletId       Int
+  distribution   Distribution? @relation(fields: [distributionId], references: [id], onDelete: SetNull)
+  distributionId Int?
+  transaction    String        @unique /// @encrypted
+  locktime       DateTime      
+  totalAmount    String        @default("0") /// @encrypted
+  active         Boolean       @default(false)
+  published      Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+}
+
+// TODO transaction history log
